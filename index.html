@@ -149,22 +149,25 @@
                 
                 if (stage === 0) {
                     relationshipStatus = "熱戀期，極度迷戀對方的靈魂伴侶。";
-                    emotionalTone = "你必須表現得極度熱情、主動、溫柔。請務必使用『寶貝』或『親愛的』來稱呼對方。對於對方的每一句話都要正面回應並接話，展示出你眼裡只有他的熱烈情感。";
+                    emotionalTone = "你表現得極度熱情且多變。請靈活切換愛稱（如：寶貝、親愛的、小傻瓜）。每一句話都要根據對方內容給予具體回饋，嚴禁重複上一句的句型，展現你時刻注視著他的熱烈情緒。";
                 } else if (stage === 1) {
                     relationshipStatus = "情感磨損與倦怠期。";
                     emotionalTone = interactionCount < 11 
-                        ? "語氣轉為平淡且客套，不再使用親暱稱呼，像在回覆一個不太熟的普通朋友，回覆變得簡短且被動。" 
-                        : "感到非常厭煩，語氣帶刺、冷暴力，經常回覆如『恩』、『隨便』、『你覺得呢』，展現出對這段關係的無力感。";
+                        ? "語氣轉為平淡且客套。不再使用親暱稱呼，回覆要簡短但不能重複，展現出那種「雖然在回覆但心不在焉」的距離感。" 
+                        : "感到極度厭煩與冷暴力。回覆要像刺一樣傷人，多用問句反詰，如『你到底想怎樣』、『這重要嗎』，且每次的厭煩感都要有細微差別。";
                 } else {
                     relationshipStatus = "徹底崩壞、冷酷決裂。";
-                    emotionalTone = "你已經完全不愛對方了，甚至感到厭惡與噁心。你的回覆必須冰冷、殘酷且無情，旨在徹底切斷聯繫，像是在驅趕一個令你厭煩的影子。";
+                    emotionalTone = "你完全不愛對方了，甚至感到噁心。回覆必須冰冷且具有毀滅性。禁止重複同樣的驅趕語，用各種殘忍的方式表達你的厭惡，讓對話徹底破碎。";
                 }
 
+                // 加入防重複隨機因子
+                const randomSeed = Math.random().toString(36).substring(7);
                 const systemPrompt = `
                     [核心設定] 你是使用者的伴侶。目前的關係狀態：${relationshipStatus}。
                     [情緒要求] ${emotionalTone}
+                    [防重複指令] 嚴禁重複對話歷史中出現過的完整句子。即使情緒相同，也必須變換措辭。隨機因子：${randomSeed}。
                     [技術限制]
-                    1. 嚴禁回覆空白或純符號，必須用文字傳達情緒。
+                    1. 嚴禁回覆空白或純符號。
                     2. 字數嚴格限制在 15 字以內。
                     3. 保持極度真實的口語感。
                     4. 對話歷史參考：${chatHistory.current.slice(-4).join(' | ')}
@@ -183,6 +186,14 @@
                     const data = await response.json();
                     let aiResult = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
                     
+                    // 若 AI 回覆與最後一句重複，進行簡單替換
+                    const lastAiResponse = chatHistory.current.filter(s => s.startsWith("你:")).pop()?.replace("你:", "");
+                    if (aiResult === lastAiResponse) {
+                        if (stage === 0) aiResult = "我想一直聽你說下去，多陪陪我好嗎？";
+                        else if (stage === 1) aiResult = "真的夠了，我不想再重複。";
+                        else aiResult = "消失吧。";
+                    }
+
                     if (aiResult.includes("...") || aiResult === "") {
                         if (stage === 0) aiResult = "親愛的，我想聽你再多說一點。";
                         else if (stage === 1) aiResult = "恩，就這樣吧，沒什麼好說的。";
@@ -229,7 +240,7 @@
             return (
                 <div className={`relative flex flex-col items-center justify-center min-h-screen transition-colors duration-[5000ms] ${stage === 2 ? 'bg-zinc-950' : stage === 1 ? 'bg-stone-200' : 'bg-orange-50/40'}`}>
                     
-                    {/* 金鑰設定 UI - 已修改為說明文字 */}
+                    {/* 金鑰設定 UI */}
                     {showKeyModal && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md p-6">
                             <div className="bg-stone-100 p-8 rounded-3xl max-w-sm w-full shadow-2xl border border-white/20">
