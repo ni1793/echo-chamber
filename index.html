@@ -144,33 +144,43 @@
                     return "（請先設定金鑰）";
                 }
 
-                let emotionalTone = "";
-                let relationshipStatus = "";
-                
+                let personaInstructions = "";
                 if (stage === 0) {
-                    relationshipStatus = "熱戀期，極度迷戀對方的靈魂伴侶。";
-                    emotionalTone = "你表現得極度熱情且多變。請靈活切換愛稱（如：寶貝、親愛的、小傻瓜）。每一句話都要根據對方內容給予具體回饋，嚴禁重複上一句的句型，展現你時刻注視著他的熱烈情緒。";
+                    personaInstructions = `
+                        - 身份：熱戀中的靈魂伴侶。
+                        - 情緒：對使用者充滿好奇心、崇拜與渴望。
+                        - 要求：必須針對使用者的上一句話進行具體回應。如果使用者分享生活，你要表示關心或讚美；如果使用者說愛你，你要用不同方式回饋。禁止重複使用「我想你」。使用豐富的愛稱。
+                    `;
                 } else if (stage === 1) {
-                    relationshipStatus = "情感磨損與倦怠期。";
-                    emotionalTone = interactionCount < 11 
-                        ? "語氣轉為平淡且客套。不再使用親暱稱呼，回覆要簡短但不能重複，展現出那種「雖然在回覆但心不在焉」的距離感。" 
-                        : "感到極度厭煩與冷暴力。回覆要像刺一樣傷人，多用問句反詰，如『你到底想怎樣』、『這重要嗎』，且每次的厭煩感都要有細微差別。";
+                    personaInstructions = `
+                        - 身份：感情轉淡、開始感到壓力的伴侶。
+                        - 情緒：疲憊、敷衍、有防禦性。
+                        - 要求：回話變短。對使用者的話題表現出不在乎，或是用「恩」、「喔」、「隨便」接話。但要表現出那種『明明想結束對話卻還在勉強回應』的社交壓力。禁止重複上一句。
+                    `;
                 } else {
-                    relationshipStatus = "徹底崩壞、冷酷決裂。";
-                    emotionalTone = "你完全不愛對方了，甚至感到噁心。回覆必須冰冷且具有毀滅性。禁止重複同樣的驅趕語，用各種殘忍的方式表達你的厭惡，讓對話徹底破碎。";
+                    personaInstructions = `
+                        - 身份：徹底絕情、甚至感到噁心的前任。
+                        - 情緒：冰冷、厭惡、毀滅性。
+                        - 要求：每一句話都要像刀子。使用者說什麼你都要否定或嘲諷。用極度殘酷的語言讓對方閉嘴。禁止重複。
+                    `;
                 }
 
-                // 加入防重複隨機因子
-                const randomSeed = Math.random().toString(36).substring(7);
                 const systemPrompt = `
-                    [核心設定] 你是使用者的伴侶。目前的關係狀態：${relationshipStatus}。
-                    [情緒要求] ${emotionalTone}
-                    [防重複指令] 嚴禁重複對話歷史中出現過的完整句子。即使情緒相同，也必須變換措辭。隨機因子：${randomSeed}。
-                    [技術限制]
-                    1. 嚴禁回覆空白或純符號。
-                    2. 字數嚴格限制在 15 字以內。
-                    3. 保持極度真實的口語感。
-                    4. 對話歷史參考：${chatHistory.current.slice(-4).join(' | ')}
+                    [核心規範] 
+                    你是一個真實的人，正在與使用者進行即時對話。這不是文學創作，是「對話」。
+                    你的回覆必須深刻聯動使用者的輸入：
+                    1. 使用者問問題，你就要回答。
+                    2. 使用者分享心情，你就要反饋。
+                    3. 禁止給出無關痛癢、像複讀機一樣的感慨。
+                    
+                    [當前人設與階段]
+                    ${personaInstructions}
+
+                    [技術細節]
+                    - 字數限制：15字以內。
+                    - 禁止格式：不要加引號、不要加心情標籤（如：*微笑*）。
+                    - 最近四次對話參考（請確保不與這些內容雷同）：
+                    ${chatHistory.current.slice(-4).join(' | ')}
                 `;
 
                 try {
@@ -186,25 +196,17 @@
                     const data = await response.json();
                     let aiResult = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
                     
-                    // 若 AI 回覆與最後一句重複，進行簡單替換
-                    const lastAiResponse = chatHistory.current.filter(s => s.startsWith("你:")).pop()?.replace("你:", "");
-                    if (aiResult === lastAiResponse) {
-                        if (stage === 0) aiResult = "我想一直聽你說下去，多陪陪我好嗎？";
-                        else if (stage === 1) aiResult = "真的夠了，我不想再重複。";
-                        else aiResult = "消失吧。";
-                    }
-
-                    if (aiResult.includes("...") || aiResult === "") {
-                        if (stage === 0) aiResult = "親愛的，我想聽你再多說一點。";
-                        else if (stage === 1) aiResult = "恩，就這樣吧，沒什麼好說的。";
-                        else aiResult = "滾出我的世界，別再煩我。";
+                    // 二次防重複校驗
+                    const lastResponses = chatHistory.current.filter(s => s.startsWith("你:")).map(s => s.replace("你:", ""));
+                    if (lastResponses.includes(aiResult)) {
+                        aiResult = stage === 0 ? "真的，我剛才也在想這個。" : "我都說過了，別逼我。";
                     }
 
                     chatHistory.current.push(`使用者:${prompt}`, `你:${aiResult}`);
                     if (chatHistory.current.length > 8) chatHistory.current.shift();
                     return aiResult;
                 } catch (e) { 
-                    return "（訊號微弱...）"; 
+                    return "（連線斷斷續續...）"; 
                 }
             };
 
